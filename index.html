@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Proposiciones → Enunciados & Tabla de Verdad</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body{font-family:Arial, Helvetica, sans-serif; padding:18px; max-width:900px; margin:auto}
+    h1{font-size:20px}
+    input, button, textarea, select {padding:8px; margin:6px 0; font-size:14px}
+    .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+    .vars-list{border:1px solid #ccc; padding:8px; margin-top:8px}
+    table{border-collapse:collapse; margin-top:12px; width:100%}
+    th,td{border:1px solid #444; padding:6px; text-align:center}
+    .small{font-size:13px; color:#444}
+    .btn-danger{background:#c0392b;color:white;border:none;padding:6px 8px;border-radius:4px}
+    .btn{background:#2d9cdb;color:white;border:none;padding:8px 10px;border-radius:6px}
+    .resultado{margin-top:12px;font-weight:700}
+  </style>
+</head>
+<body>
+  <h1>Transformador de proposiciones y Generador de Tabla de Verdad</h1>
+
+  <section>
+    <h2>1) Definir variables</h2>
+    <div class="row">
+      <input id="varInput" placeholder="Escribe: P=llueve" style="flex:1" />
+      <button class="btn" onclick="addVariable()">Agregar</button>
+      <button onclick="clearVariables()">Limpiar</button>
+    </div>
+    <div class="vars-list" id="varsContainer">No hay variables definidas</div>
+  </section>
+
+  <section>
+    <h2>2) Escribe la proposición</h2>
+    <p class="small"> Usa los símbolos: ¬ (negación), ∧ (y), ∨ (o), → (entonces), ↔ (si y solo si). Ejemplo: (P∧Q)→R,
+      
+      OJO: P → Q  ≡ ¬P ∨ Q </p>
+    <input id="expr" placeholder="((P∧Q)→R)" style="width:100%" />
+    <div style="margin-top:8px" class="row">
+      <button class="btn" onclick="transformStatement()">Transformar a enunciado</button>
+      <button class="btn" onclick="generateTable()">Generar tabla de verdad</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Salida</h2>
+    <div id="output"></div>
+  </section>
+
+<script>
+  const variables = {};
+
+  function renderVars(){
+    const cont = document.getElementById('varsContainer');
+    const keys = Object.keys(variables);
+    if(keys.length === 0){
+      cont.innerHTML = 'No hay variables definidas';
+      return;
+    }
+    let html = '<div class="row" style="gap:12px;flex-direction:column">';
+    keys.forEach(k=>{
+      html += `<div style="display:flex;justify-content:space-between;align-items:center">
+        <div><b>${k}</b> = ${escapeHtml(variables[k])}</div>
+        <div>
+          <button onclick="editVar('${k}')">editar</button>
+          <button class="btn-danger" onclick="deleteVar('${k}')">eliminar</button>
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+    cont.innerHTML = html;
+  }
+
+  function addVariable(){
+    const input = document.getElementById('varInput');
+    const text = input.value.trim();
+    if(!text){ alert('Escribe la variable en formato P=llueve'); return; }
+    if(!text.includes('=')){ alert('Usa el formato P=llueve'); return; }
+
+    const parts = text.split('=');
+    const name = parts[0].trim();
+    const desc = parts.slice(1).join('=').trim();
+
+    if(!/^[A-Za-z]+$/.test(name)){ alert('El nombre debe tener solo letras'); return; }
+    if(!desc){ alert('Agrega una descripción para la variable'); return; }
+
+    variables[name] = desc;
+    input.value = '';
+    renderVars();
+  }
+
+  function editVar(k){
+    const nuevo = prompt('Editar definición de ' + k, variables[k]);
+    if(nuevo !== null){
+      if(nuevo.trim()===''){ alert('No permitido vacío'); return; }
+      variables[k] = nuevo.trim();
+      renderVars();
+    }
+  }
+
+  function deleteVar(k){ delete variables[k]; renderVars(); }
+
+  function clearVariables(){ 
+    if(!confirm('Borrar todas las variables?')) return;
+    for(let k in variables) delete variables[k];
+    renderVars();
+  }
+
+  function escapeHtml(s){
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function escapeRegex(str){
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function transformStatement(){
+    const expr = document.getElementById('expr').value.trim();
+    const out = document.getElementById('output');
+
+    if(!expr){ out.innerHTML = '<p style="color:red">Escribe la proposición primero</p>'; return; }
+    if(Object.keys(variables).length===0){ out.innerHTML = '<p style="color:red">Define variables primero</p>'; return; }
+
+    let result = expr;
+    const names = Object.keys(variables).sort((a,b)=>b.length-a.length);
+
+    names.forEach(n=>{
+      const re = new RegExp('\\b' + escapeRegex(n) + '\\b', 'g');
+      result = result.replace(re, variables[n]);
+    });
+
+    result = result
+      .replace(/¬/g, 'no ')
+      .replace(/∧/g, ' y ')
+      .replace(/∨/g, ' o ')
+      .replace(/→/g, ' entonces ')
+      .replace(/↔/g, ' si y solo si ');
+
+    out.innerHTML = '<p><b>Enunciado:</b> ' + escapeHtml(result) + '</p>';
+  }
+
+  function generateTable(){
+    const expr = document.getElementById('expr').value.trim();
+    const out = document.getElementById('output');
+    const vars = Object.keys(variables);
+
+    if(!expr){ out.innerHTML = '<p style="color:red">Escribe la proposición primero</p>'; return; }
+    if(vars.length===0){ out.innerHTML = '<p style="color:red">Define variables primero</p>'; return; }
+
+    const filas = Math.pow(2, vars.length);
+    const rows = [];
+
+    for(let i=0;i<filas;i++){
+      const row = {};
+      for(let j=0;j<vars.length;j++){
+        const tam = Math.pow(2, vars.length - j - 1);
+        row[vars[j]] = ((i / tam) % 2) < 1;
+      }
+      rows.push(row);
+    }
+
+    function evalExprRaw(expression, mapping){
+      let temp = expression;
+      const names = Object.keys(mapping).sort((a,b)=>b.length-a.length);
+
+      names.forEach(n=>{
+        const v = mapping[n] ? 'true' : 'false';
+        const re = new RegExp('\\b' + escapeRegex(n) + '\\b', 'g');
+        temp = temp.replace(re, v);
+      });
+
+      temp = temp.replace(/\[/g, '(').replace(/\]/g, ')');
+
+      temp = temp.replace(/¬/g, '!');
+      temp = temp.replace(/∧/g, '&&');
+      temp = temp.replace(/∨/g, '||');
+      temp = temp.replace(/↔/g, '===');
+
+      temp = temp.replace(/→/g, '=>');
+
+      temp = temp.replace(/(\btrue\b|\bfalse\b|\([^()]+\))\s*=>\s*(\btrue\b|\bfalse\b|\([^()]+\))/g,
+        (m,a,b)=>`((!${a})||(${b}))`);
+
+      try{
+        return Function('"use strict"; return (' + temp + ')')();
+      }catch(e){
+        return null;
+      }
+    }
+
+    let html = '<table><thead><tr>';
+    vars.forEach(v=> html += `<th>${v}</th>`);
+    html += '<th>Resultado</th></tr></thead><tbody>';
+
+    const results = [];
+
+    for(const r of rows){
+      const val = evalExprRaw(expr, r);
+      if(val === null){
+        out.innerHTML = '<p style="color:red">Error en la expresión</p>';
+        return;
+      }
+      results.push(!!val);
+      html += '<tr>';
+      vars.forEach(v=> html += `<td>${r[v] ? "V" : "F"}</td>`);
+      html += `<td>${val ? "V" : "F"}</td></tr>`;
+    }
+
+    html += '</tbody></table>';
+
+    let tipo;
+    if(results.every(x=>x)) tipo = 'TAUTOLÓGICA';
+    else if(results.every(x=>!x)) tipo = 'CONTRADICTORIA';
+    else tipo = 'CONTINGENTE';
+
+    html += `<p class="resultado">La proposición es: <span>${tipo}</span></p>`;
+
+    let enun = expr;
+    const names2 = Object.keys(variables).sort((a,b)=>b.length-a.length);
+
+    names2.forEach(n=>{
+      const re = new RegExp('\\b' + escapeRegex(n) + '\\b', 'g');
+      enun = enun.replace(re, variables[n]);
+    });
+
+    enun = enun
+      .replace(/¬/g, 'no ')
+      .replace(/∧/g, ' y ')
+      .replace(/∨/g, ' o ')
+      .replace(/→/g, ' entonces ')
+      .replace(/↔/g, ' si y solo si ');
+
+    html += `<p><b>Enunciado:</b> ${escapeHtml(enun)}</p>`;
+
+    out.innerHTML = html;
+  }
+</script>
+</body>
+</html>
